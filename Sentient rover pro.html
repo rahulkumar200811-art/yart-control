@@ -1,0 +1,466 @@
+```html
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>YART ULTRA COMMAND CENTER</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+
+body{
+margin:0;
+background:#04060c;
+color:white;
+font-family:Segoe UI;
+}
+
+/* YART background */
+
+body::before{
+content:"YART";
+position:fixed;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+font-size:250px;
+color:rgba(255,255,255,0.03);
+font-weight:bold;
+pointer-events:none;
+}
+
+/* HEADER */
+
+header{
+display:flex;
+align-items:center;
+justify-content:center;
+background:#0b0e18;
+border-bottom:2px solid cyan;
+padding:10px;
+}
+
+header img{
+width:70px;
+margin-right:15px;
+}
+
+header h1{
+margin:0;
+color:#00eaff;
+}
+
+/* GRID */
+
+#grid{
+display:grid;
+grid-template-columns:1fr 2fr 1fr;
+grid-template-rows:360px 360px;
+gap:10px;
+padding:10px;
+}
+
+.panel{
+background:#0e1322;
+border:2px solid cyan;
+border-radius:8px;
+box-shadow:0 0 10px cyan;
+padding:10px;
+}
+
+.panel h3{
+margin-top:0;
+color:#00eaff;
+}
+
+canvas{
+background:black;
+width:100%;
+height:100%;
+}
+
+#camera img{
+width:100%;
+height:100%;
+object-fit:cover;
+}
+
+/* JOYSTICK */
+
+#joystick{
+width:150px;
+height:150px;
+border-radius:50%;
+background:#111;
+margin:auto;
+position:relative;
+border:2px solid cyan;
+}
+
+#stick{
+width:50px;
+height:50px;
+background:cyan;
+border-radius:50%;
+position:absolute;
+top:50px;
+left:50px;
+}
+
+/* BUTTONS */
+
+button{
+background:#121a30;
+color:white;
+border:1px solid cyan;
+padding:10px;
+margin:4px;
+cursor:pointer;
+}
+
+button:hover{
+background:cyan;
+color:black;
+}
+
+#history{
+height:150px;
+overflow:auto;
+background:black;
+font-size:12px;
+padding:5px;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+
+<img src="logo.png">
+
+<h1>YART ULTRA COMMAND CENTER</h1>
+
+</header>
+
+<div id="grid">
+
+<!-- RADAR -->
+
+<div class="panel">
+
+<h3>Radar Scanner</h3>
+
+<canvas id="radar" width="300" height="300"></canvas>
+
+</div>
+
+<!-- CAMERA -->
+
+<div class="panel" id="camera">
+
+<h3>Camera Stream</h3>
+
+<img id="camFeed" src="" alt="Waiting for camera stream">
+
+</div>
+
+<!-- SENSORS -->
+
+<div class="panel">
+
+<h3>Sensors</h3>
+
+Distance: <span id="distance">--</span> cm<br>
+Status: <span id="status">SAFE</span><br>
+Mode: <span id="mode">Manual</span>
+
+</div>
+
+<!-- MAP -->
+
+<div class="panel">
+
+<h3>Navigation Map</h3>
+
+<canvas id="map" width="400" height="400"></canvas>
+
+</div>
+
+<!-- CONTROLS -->
+
+<div class="panel">
+
+<h3>Controls</h3>
+
+<button onclick="connect()">CONNECT</button>
+
+<button onclick="returnHome()">RETURN HOME</button>
+
+<button onclick="replay()">REPLAY</button>
+
+<br><br>
+
+<button onclick="send('U')">⬆</button><br>
+
+<button onclick="send('L')">⬅</button>
+
+<button onclick="send('S')">STOP</button>
+
+<button onclick="send('R')">➡</button><br>
+
+<button onclick="send('D')">⬇</button>
+
+<h3>Mobile Joystick</h3>
+
+<div id="joystick">
+<div id="stick"></div>
+</div>
+
+</div>
+
+<!-- HISTORY -->
+
+<div class="panel">
+
+<h3>Command Log</h3>
+
+<div id="history"></div>
+
+<!-- 3D VIEW -->
+
+<h3>Robot 3D View</h3>
+
+<canvas id="robot3d" width="200" height="200"></canvas>
+
+</div>
+
+</div>
+
+<script>
+
+/* SERIAL */
+
+let port
+let writer
+
+async function connect(){
+
+port=await navigator.serial.requestPort()
+
+await port.open({baudRate:9600})
+
+const encoder=new TextEncoderStream()
+encoder.readable.pipeTo(port.writable)
+writer=encoder.writable.getWriter()
+
+readData()
+
+log("Robot Connected")
+
+}
+
+async function send(c){
+
+if(writer){
+
+await writer.write(c)
+
+log("CMD "+c)
+
+}
+
+}
+
+/* LOG */
+
+function log(t){
+
+let h=document.getElementById("history")
+
+h.innerHTML+=t+"<br>"
+
+h.scrollTop=h.scrollHeight
+
+}
+
+/* SENSOR DATA */
+
+async function readData(){
+
+const decoder=new TextDecoderStream()
+port.readable.pipeTo(decoder.writable)
+const reader=decoder.readable.getReader()
+
+while(true){
+
+const {value,done}=await reader.read()
+
+if(done) break
+
+if(!value) continue
+
+if(value.includes("D:")){
+
+let d=value.split(":")[1]
+
+document.getElementById("distance").innerText=d
+
+if(d<25){
+
+status.innerText="OBSTACLE"
+status.style.color="red"
+
+}else{
+
+status.innerText="SAFE"
+status.style.color="lime"
+
+}
+
+}
+
+if(value.includes("SCAN:")){
+
+let data=value.replace("SCAN:","").split(",")
+
+drawRadar(data[0],data[1])
+
+}
+
+}
+
+}
+
+/* RADAR */
+
+let radar=document.getElementById("radar")
+let rctx=radar.getContext("2d")
+
+let sweep=0
+
+function animateRadar(){
+
+rctx.clearRect(0,0,300,300)
+
+rctx.strokeStyle="lime"
+
+rctx.beginPath()
+rctx.arc(150,150,140,0,Math.PI*2)
+rctx.stroke()
+
+let x=150+140*Math.cos(sweep)
+let y=150+140*Math.sin(sweep)
+
+rctx.strokeStyle="lime"
+
+rctx.beginPath()
+rctx.moveTo(150,150)
+rctx.lineTo(x,y)
+rctx.stroke()
+
+sweep+=0.03
+
+requestAnimationFrame(animateRadar)
+
+}
+
+animateRadar()
+
+function drawRadar(a,d){
+
+let rad=a*Math.PI/180
+
+let x=150+d*Math.cos(rad)
+let y=150+d*Math.sin(rad)
+
+rctx.fillStyle="red"
+rctx.fillRect(x,y,5,5)
+
+}
+
+/* MAP */
+
+let map=document.getElementById("map")
+let mctx=map.getContext("2d")
+
+let x=200
+let y=200
+
+function drawRobot(){
+
+mctx.fillStyle="red"
+
+mctx.beginPath()
+mctx.arc(x,y,6,0,Math.PI*2)
+mctx.fill()
+
+}
+
+drawRobot()
+
+/* 3D VIEW */
+
+let robot3d=document.getElementById("robot3d")
+let ctx3d=robot3d.getContext("2d")
+
+let angle=0
+
+function animate3D(){
+
+ctx3d.clearRect(0,0,200,200)
+
+ctx3d.save()
+
+ctx3d.translate(100,100)
+ctx3d.rotate(angle)
+
+ctx3d.fillStyle="cyan"
+
+ctx3d.fillRect(-20,-10,40,20)
+
+ctx3d.restore()
+
+angle+=0.02
+
+requestAnimationFrame(animate3D)
+
+}
+
+animate3D()
+
+/* KEYBOARD */
+
+document.addEventListener("keydown",function(e){
+
+if(e.key=="ArrowUp") send("U")
+if(e.key=="ArrowDown") send("D")
+if(e.key=="ArrowLeft") send("L")
+if(e.key=="ArrowRight") send("R")
+
+})
+
+document.addEventListener("keyup",function(){
+
+send("S")
+
+})
+
+/* JOYSTICK */
+
+let stick=document.getElementById("stick")
+
+stick.addEventListener("touchmove",function(e){
+
+let x=e.touches[0].clientX
+let y=e.touches[0].clientY
+
+})
+
+</script>
+
+</body>
+</html>
+```
