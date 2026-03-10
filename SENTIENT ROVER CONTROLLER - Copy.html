@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>YART ROVER COMMAND CENTER</title>
+
+<style>
+body{
+  margin:0;
+  background:#05060a;
+  color:white;
+  font-family:Segoe UI;
+  overflow:auto;
+}
+body::before{
+  content:"YART";
+  position:fixed;
+  top:45%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:260px;
+  color:rgba(255,255,255,0.03);
+  font-weight:bold;
+  pointer-events:none;
+}
+
+header{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  background:#0b0e18;
+  border-bottom:2px solid cyan;
+  padding:10px;
+}
+header img{ width:90px; margin-bottom:5px; }
+header h1{ color:cyan; margin:0; }
+
+#dashboard{
+  display:grid;
+  grid-template-columns:1fr 1.2fr 1fr;
+  grid-template-rows:300px 300px;
+  gap:12px;
+  padding:12px;
+}
+
+.panel{
+  background:#0e1322;
+  border:2px solid cyan;
+  border-radius:10px;
+  padding:10px;
+  box-shadow:0 0 10px cyan;
+  overflow:hidden;
+}
+.panel h3{ margin-top:0; color:#00eaff; }
+
+#camera{ display:flex; justify-content:center; align-items:center; flex-direction:column; }
+#camera img{ width:100%; height:100%; object-fit:cover; border:1px solid cyan; border-radius:5px; }
+
+canvas{ display:block; border-radius:5px; }
+.sensor{ font-size:20px; margin:8px 0; }
+#controls{ text-align:center; }
+button{
+  background:#121a30;
+  color:white;
+  border:1px solid cyan;
+  padding:10px;
+  margin:5px;
+  font-size:16px;
+  cursor:pointer;
+  border-radius:5px;
+}
+button:hover{ background:cyan; color:black; }
+#history{ height:150px; overflow:auto; background:black; font-size:12px; padding:5px; }
+</style>
+</head>
+<body>
+
+<header>
+<img src="logo.png">
+<h1>YART ROVER COMMAND CENTER</h1>
+</header>
+
+<div id="dashboard">
+
+<div class="panel">
+  <h3>Radar Scanner</h3>
+  <canvas id="radar"></canvas>
+</div>
+
+<div class="panel" id="camera">
+  <h3>Camera Feed</h3>
+  <img id="camFeed" src="" alt="Waiting for camera...">
+</div>
+
+<div class="panel">
+  <h3>Sensor Data</h3>
+  <div class="sensor">Distance: <span id="distance">--</span> cm</div>
+  <div class="sensor">Status: <span id="status">SAFE</span></div>
+  <div class="sensor">Speed: <span id="speed">0</span></div>
+  <div class="sensor">Mode: <span id="mode">Manual</span></div>
+</div>
+
+<div class="panel">
+  <h3>Navigation Map</h3>
+  <canvas id="map"></canvas>
+</div>
+
+<div class="panel" id="controls">
+<h3>Robot Control</h3>
+<button onclick="connectRobot()">CONNECT</button>
+<button onclick="returnHome()">RETURN HOME</button>
+<button onclick="replay()">REPLAY PATH</button>
+<br><br>
+<button onclick="send('U')">⬆</button><br>
+<button onclick="send('L')">⬅</button>
+<button onclick="send('S')">STOP</button>
+<button onclick="send('R')">➡</button><br>
+<button onclick="send('D')">⬇</button>
+</div>
+
+<div class="panel">
+<h3>Command History</h3>
+<div id="history"></div>
+</div>
+
+<script>
+let port, writer;
+let historyCommands = [];
+
+// ====== CANVAS SETUP ======
+function setCanvasSize(){
+  const radarCanvas = document.getElementById("radar");
+  radarCanvas.width = radarCanvas.clientWidth;
+  radarCanvas.height = radarCanvas.clientHeight;
+
+  const mapCanvas = document.getElementById("map");
+  mapCanvas.width = mapCanvas.clientWidth;
+  mapCanvas.height = mapCanvas.clientHeight;
+}
+setCanvasSize();
+
+// ====== MAP VARIABLES ======
+let map = document.getElementById("map");
+let mctx = map.getContext("2d");
+
+let robotX = 0;
+let robotY = 0;
+
+let zoom = 1;       // current zoom
+let targetZoom = 1; // zoom we want to smoothly approach
+
+// ====== RADAR VARIABLES ======
+let radar = document.getElementById("radar");
+let rctx = radar.getContext("2d");
+let radarAngle = 0;
+
+// ====== LOGGING ======
+function log(txt){
+  let h=document.getElementById("history");
+  h.innerHTML+=txt+"<br>";
+  h.scrollTop=h.scrollHeight;
+}
+
+// ====== SERIAL ======
+async function connectRobot() {
+  try{
+    port = await navigator.serial.requestPort();
+    await port.open({baudRate:9600});
+    const encoder = new TextEncoderStream();
+    encoder.readable.pipeTo(port.writable);
+    writer = encoder.writable.getWriter();
+    readData();
+    log("Robot Connected");
+  }catch(e){ console.error(e); alert("Connection Failed: "+e);}
+}
+
+// ====== SEND COMMAND ======
+async function send(c){
+  if(writer){
+    await writer.write(c);
+    log("CMD: "+c);
+    historyCommands.push({cmd:c,time:Date.now()});
+    moveRobot(c);
+  }
+}
+
+function moveRobot(c){
+  const step = 10;
+  if(c=="U") robotY -= step;
+  if(c=="D") robotY += step;
+  if(c=="L") robotX -= step;
+  if(c=="R") robotX += step;
+  drawMap();
+}
+
+// ====== DYNAMIC SMOOTH ZOOM ======
+function drawMap(){
+  mctx.clearRect(0,0,map.width,map.height);
+
+  const margin = 50;
+  const halfW = map.width/2;
+  const halfH = map.height/2;
+
+  // Calculate targetZoom only if robot is near edge
+  let scaleX = 1, scaleY = 1;
+
+  if(robotX > halfW-margin) scaleX = (halfW-margin)/robotX;
+  if(robotX < -halfW+margin) scaleX = (halfW-margin)/-robotX;
+  if(robotY > halfH-margin) scaleY = (halfH-margin)/robotY;
+  if(robotY < -halfH+margin) scaleY = (halfH-margin)/-robotY;
+
+  targetZoom = Math.min(scaleX, scaleY, 1);
+
+  // Smooth interpolation
+  zoom += (targetZoom - zoom) * 0.05; // 0.05 = smoothing factor
+
+  mctx.save();
+  mctx.translate(map.width/2, map.height/2);
+  mctx.scale(zoom, zoom);
+  mctx.translate(-robotX, -robotY);
+
+  // Grid
+  const gridSize = 40;
+  mctx.strokeStyle = "#333";
+  for(let i=-1000;i<=1000;i+=gridSize){
+    mctx.beginPath();
+    mctx.moveTo(i,-1000);
+    mctx.lineTo(i,1000);
+    mctx.stroke();
+    mctx.beginPath();
+    mctx.moveTo(-1000,i);
+    mctx.lineTo(1000,i);
+    mctx.stroke();
+  }
+
+  // Robot
+  mctx.fillStyle="red";
+  mctx.beginPath();
+  mctx.arc(robotX, robotY,6,0,2*Math.PI);
+  mctx.fill();
+
+  mctx.restore();
+  requestAnimationFrame(drawMap); // continuous redraw for smooth zoom
+}
+
+// ====== RETURN HOME ======
+async function returnHome(){
+  log("Returning Home...");
+  let reverse = [...historyCommands].reverse();
+  for(let i=0;i<reverse.length;i++){
+    const c = reverse[i].cmd;
+    let revCmd;
+    if(c=="U") revCmd="D";
+    else if(c=="D") revCmd="U";
+    else if(c=="L") revCmd="R";
+    else if(c=="R") revCmd="L";
+    else revCmd="S";
+    await send(revCmd);
+    await new Promise(r=>setTimeout(r,100));
+  }
+  await send('S');
+  log("Reached Home and Stopped");
+}
+
+// ====== REPLAY PATH (MAP ONLY) ======
+async function replay(){
+  log("Replaying Path on Map Only...");
+  if(historyCommands.length===0) return;
+
+  let tempX=0,tempY=0;
+  let pathPoints=[{x:tempX,y:tempY}];
+
+  for(let i=0;i<historyCommands.length;i++){
+    let c=historyCommands[i].cmd;
+    if(c=="U") tempY-=10;
+    else if(c=="D") tempY+=10;
+    else if(c=="L") tempX-=10;
+    else if(c=="R") tempX+=10;
+    pathPoints.push({x:tempX,y:tempY});
+  }
+
+  for(let i=1;i<pathPoints.length;i++){
+    let p1=pathPoints[i-1], p2=pathPoints[i];
+    let steps=10;
+    let dx=(p2.x-p1.x)/steps;
+    let dy=(p2.y-p1.y)/steps;
+    for(let s=1;s<=steps;s++){
+      robotX=p1.x+dx*s;
+      robotY=p1.y+dy*s;
+      await new Promise(r=>setTimeout(r,30));
+    }
+  }
+  log("Replay Finished");
+}
+
+// ====== SENSOR DATA ======
+async function readData(){
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable);
+  const reader = decoder.readable.getReader();
+  while(true){
+    const {value,done}=await reader.read();
+    if(done) break;
+    if(!value) continue;
+    value=value.trim();
+    if(value.includes("D:")) document.getElementById("distance").innerText=parseInt(value.split(":")[1]);
+    if(value.includes("S:")) document.getElementById("speed").innerText=parseInt(value.split(":")[1]);
+    if(value.includes("ST:")){
+      let st=value.split(":")[1];
+      document.getElementById("status").innerText=st;
+      document.getElementById("status").style.color= st=="OBSTACLE"?"red":"lime";
+    }
+  }
+}
+
+// ====== KEYBOARD CONTROL ======
+document.addEventListener("keydown",function(e){
+  if(e.key=="ArrowUp") send("U");
+  if(e.key=="ArrowDown") send("D");
+  if(e.key=="ArrowLeft") send("L");
+  if(e.key=="ArrowRight") send("R");
+});
+document.addEventListener("keyup",function(){ send("S"); });
+
+// ====== RADAR ======
+function drawRadar(){
+  rctx.clearRect(0,0,radar.width,radar.height);
+  let cx=radar.width/2,cy=radar.height/2;
+  let radius=Math.min(cx,cy)-10;
+
+  // Full circle
+  rctx.strokeStyle="lime";
+  rctx.lineWidth=1.5;
+  rctx.beginPath();
+  rctx.arc(cx,cy,radius,0,2*Math.PI);
+  rctx.stroke();
+
+  // Scanning line
+  rctx.strokeStyle="lime";
+  rctx.lineWidth=2;
+  rctx.beginPath();
+  rctx.moveTo(cx,cy);
+  let rad=radarAngle*Math.PI/180;
+  rctx.lineTo(cx+radius*Math.cos(rad),cy+radius*Math.sin(rad));
+  rctx.stroke();
+
+  radarAngle+=2;
+  if(radarAngle>360) radarAngle=0;
+  requestAnimationFrame(drawRadar);
+}
+
+drawRadar();
+drawMap();
+</script>
+
+</body>
+</html>
