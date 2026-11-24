@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YART ROVER COMMAND CENTER</title>
+<style>
+ :root{
+  color-scheme:dark;
+  --bg:#050810;
+  --panel:#0b1220;
+  --panel-raised:#101b2d;
+  --line:rgba(108,190,224,.17);
+  --cyan:#48dcff;
+  --teal:#39f0c3;
+  --green:#5af2a2;
+  --amber:#ffc96b;
+  --red:#ff536d;
+  --muted:#8296b2;
+  --white:#e9f4ff;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  height:100vh;
+  min-height:0;
+  background:
+    radial-gradient(ellipse at 50% -10%,rgba(21,91,137,.22),transparent 48%),
+    radial-gradient(ellipse at 90% 80%,rgba(10,109,102,.10),transparent 36%),
+    var(--bg);
+  color:var(--white);
+  font-family:"Segoe UI",Arial,sans-serif;
+  overflow:hidden;
+}
+body::before{
+  content:"YART";
+  position:fixed;
+  top:45%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:260px;
+  color:rgba(255,255,255,0.03);
+  font-weight:bold;
+  pointer-events:none;
+}
+header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  height:78px;
+  padding:10px clamp(16px,3vw,42px);
+  background:linear-gradient(180deg,rgba(12,22,39,.96),rgba(8,14,25,.92));
+  border-bottom:1px solid rgba(72,220,255,.28);
+  box-shadow:0 8px 30px rgba(0,0,0,.28);
+  position:relative;
+  z-index:1;
+}
+header .brand{display:flex;align-items:center;gap:14px;min-width:0}
+.brandMark{width:54px;height:54px;flex:0 0 54px;display:grid;place-items:center;border:1px solid rgba(72,220,255,.48);border-radius:15px;background:linear-gradient(145deg,rgba(39,190,221,.20),rgba(11,27,43,.8));color:#d9fbff;font-size:16px;font-weight:900;letter-spacing:.06em;box-shadow:inset 0 0 18px rgba(72,220,255,.10),0 0 18px rgba(72,220,255,.12);text-shadow:0 0 12px rgba(72,220,255,.62)}
+header h1{color:var(--cyan);margin:0;font-size:clamp(17px,2vw,24px);letter-spacing:.11em;line-height:1.2}
+header .subtitle{color:var(--muted);margin:5px 0 0;font-size:10px;letter-spacing:.22em;text-transform:uppercase}
+.headerMeta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.connectionBadge,.modeBadge,.liveBadge,.bearingBadge{
+  display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+  border-radius:999px;padding:8px 12px;background:rgba(7,14,25,.76);
+  color:#b9cce2;font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
+}
+.connectionLed,.liveLed{width:7px;height:7px;border-radius:50%;background:#64748b;box-shadow:0 0 0 4px rgba(100,116,139,.10)}
+.connectionBadge.online{color:var(--green);border-color:rgba(90,242,162,.35)}
+.connectionBadge.online .connectionLed,.liveBadge.online .liveLed{background:var(--green);box-shadow:0 0 10px var(--green),0 0 0 4px rgba(90,242,162,.12)}
+.connectionBadge.connecting{color:var(--amber);border-color:rgba(255,201,107,.35)}
+.connectionBadge.connecting .connectionLed{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.liveBadge.connecting{color:var(--amber);border-color:rgba(255,201,107,.35)}
+.liveBadge.connecting .liveLed{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.liveBadge.online{color:var(--green);border-color:rgba(90,242,162,.35)}
+.modeBadge.auto{color:var(--teal);border-color:rgba(57,240,195,.34)}
+.modeBadge.manual{color:var(--cyan);border-color:rgba(72,220,255,.34)}
+#dashboard{
+  display:grid;
+  width:min(1520px,100%);
+  height:calc(100vh - 78px);
+  margin:0 auto;
+  grid-template-columns:minmax(350px,1.08fr) minmax(340px,1.1fr) minmax(280px,.82fr);
+  grid-template-rows:minmax(0,.9fr) minmax(0,1.1fr);
+  gap:12px;
+  padding:12px clamp(12px,1.4vw,20px);
+  overflow:hidden;
+}
+.panel{
+  position:relative;
+  min-width:0;
+  min-height:0;
+  background:linear-gradient(145deg,rgba(15,27,45,.96),rgba(8,15,27,.96));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:13px;
+  box-shadow:0 14px 38px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.025);
+  backdrop-filter:blur(12px);
+  overflow:hidden;
+}
+.panel::before{content:"";position:absolute;left:16px;right:16px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(72,220,255,.40),transparent)}
+.panelHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.panel h3{margin:0;color:#d8f4ff;font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+.panelKicker{color:var(--muted);font-size:10px;margin:5px 0 0;letter-spacing:.04em}
+.panelTag{color:#9cb3ca;font-size:9px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--line);border-radius:6px;padding:6px 8px;white-space:nowrap}
+#radarPanel{grid-column:1;grid-row:1 / span 2;display:flex;flex-direction:column;min-height:0}
+.radarCanvasWrap{position:relative;flex:1;min-height:0;border:1px solid rgba(72,220,255,.14);border-radius:12px;overflow:hidden;background:radial-gradient(ellipse at 50% 90%,rgba(8,66,71,.35),rgba(3,10,18,.94) 70%)}
+#radar{width:100%;height:100%;min-height:0;display:block}
+.radarReadout{font-size:12px;color:var(--green);letter-spacing:.04em;text-shadow:0 0 12px rgba(90,242,162,.34)}
+.radarLegend{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;color:var(--muted);font-size:10px}
+.legendKeys{display:flex;gap:14px;flex-wrap:wrap}
+.legendKey{display:inline-flex;align-items:center;gap:6px}
+.legendSwatch{width:8px;height:8px;border-radius:2px;background:var(--green);box-shadow:0 0 8px currentColor}
+.legendSwatch.danger{background:var(--red);color:var(--red)}
+.bearingBadge{padding:6px 9px;color:var(--cyan);font-size:9px}
+#camera{grid-column:2;grid-row:1;display:flex;flex-direction:column;min-height:0}
+.cameraFrame{position:relative;flex:1;min-height:0;border:1px solid rgba(72,220,255,.15);border-radius:11px;overflow:hidden;background:radial-gradient(ellipse at center,rgba(20,45,68,.35),rgba(3,8,15,.95))}
+#camFeed{width:100%;height:100%;object-fit:cover;border:0;border-radius:0;display:block}
+.cameraEmpty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#7188a1;text-align:center;background:linear-gradient(135deg,rgba(6,15,27,.24),rgba(2,7,13,.55));pointer-events:none}
+.cameraIcon{width:42px;height:32px;border:1px solid rgba(72,220,255,.34);border-radius:7px;position:relative;opacity:.75}
+.cameraIcon::before{content:"";position:absolute;width:12px;height:12px;border:1px solid var(--cyan);border-radius:50%;left:14px;top:9px}
+.cameraEmpty strong{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#a3b7cb}
+.cameraEmpty span{font-size:10px}
+#sensorPanel{grid-column:3;grid-row:1;display:flex;flex-direction:column}
+.metricGrid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px;flex:1;min-height:0}
+.metricCard{display:flex;flex-direction:column;justify-content:center;background:linear-gradient(145deg,rgba(16,31,51,.9),rgba(7,14,25,.85));border:1px solid rgba(126,174,207,.13);border-radius:11px;padding:clamp(8px,1.2vh,13px);min-height:0}
+.metricLabel{display:block;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:9px}
+.metricValue{font-size:25px;line-height:1;font-weight:700;color:var(--white);font-variant-numeric:tabular-nums}
+.metricUnit{font-size:10px;color:#8fa8c1;margin-left:4px;letter-spacing:.1em}
+.statusBadge{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9fb1c6}
+.statusBadge::before{content:"";width:7px;height:7px;border-radius:50%;background:#64748b}
+.statusBadge.safe{color:var(--green)}
+.statusBadge.safe::before{background:var(--green);box-shadow:0 0 9px var(--green)}
+.statusBadge.danger{color:var(--red)}
+.statusBadge.danger::before{background:var(--red);box-shadow:0 0 10px var(--red);animation:alarmPulse 1s infinite}
+.statusBadge.waiting{color:var(--amber)}
+@keyframes alarmPulse{50%{opacity:.45;box-shadow:0 0 2px var(--red)}}
+#mapPanel{grid-column:2;grid-row:2;display:flex;flex-direction:column}
+.mapStage{position:relative;flex:1;min-height:90px;overflow:hidden;border:1px solid rgba(72,220,255,.13);border-radius:10px;background:rgba(3,8,15,.54)}
+#map{width:100%;height:100%;display:block}
+#mapOverview{position:absolute;top:8px;right:8px;width:clamp(112px,27%,168px);height:clamp(76px,48%,112px);border:1px solid rgba(255,201,107,.52);border-radius:8px;background:rgba(5,12,21,.92);box-shadow:0 5px 18px rgba(0,0,0,.42);pointer-events:none}
+.overviewLabel{position:absolute;z-index:1;top:13px;right:15px;padding:3px 5px;border-radius:4px;background:rgba(5,12,21,.84);color:#ffd98d;font-size:7px;font-weight:800;letter-spacing:.12em;pointer-events:none}
+.historyInline{flex:0 0 72px;border-top:1px solid rgba(126,174,207,.14);margin-top:7px;padding-top:6px;min-height:0}
+.historyInlineHead{display:flex;justify-content:space-between;align-items:center;color:#b8ccdf;font-size:9px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px}
+.historyInlineHead span{color:#66839a;font-size:8px}
+#controls{grid-column:3;grid-row:2;text-align:center;display:flex;flex-direction:column}
+.controlActions{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px;margin:5px 0 8px}
+.controlActions button{padding:7px 5px;font-size:9px;letter-spacing:.03em}
+.drivePad{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,39px);gap:4px;justify-content:center;margin:3px auto 7px}
+.drivePad button{margin:0;padding:0;font-size:21px}
+.drivePad .up{grid-column:2;grid-row:1}
+.drivePad .left{grid-column:1;grid-row:2}
+.drivePad .stop{grid-column:2;grid-row:2;background:linear-gradient(145deg,#782334,#3a1723);border-color:rgba(255,83,109,.65);color:#ffdce2;font-size:10px;font-weight:800;letter-spacing:.1em}
+.drivePad .right{grid-column:3;grid-row:2}
+.drivePad .down{grid-column:2;grid-row:3}
+button{
+  background:linear-gradient(145deg,#14243a,#0b1423);
+  color:#d7f5ff;
+  border:1px solid rgba(72,220,255,.27);
+  padding:10px 12px;
+  margin:0;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.07em;
+  cursor:pointer;
+  border-radius:9px;
+  transition:transform .14s ease,border-color .14s ease,background .14s ease,box-shadow .14s ease;
+}
+button:hover{background:linear-gradient(145deg,#1c4560,#102638);border-color:rgba(72,220,255,.72);box-shadow:0 0 16px rgba(72,220,255,.14);transform:translateY(-1px)}
+button:active{transform:translateY(1px);box-shadow:none}
+.primaryButton{background:linear-gradient(135deg,#087b8f,#12506a);border-color:rgba(72,220,255,.6);color:#ecfbff}
+.note{font-size:9px;color:var(--muted);margin:3px 0;line-height:1.35}
+#history{height:48px;overflow:auto;background:rgba(2,7,13,.76);border:1px solid rgba(126,174,207,.12);border-radius:7px;font-family:Consolas,"Courier New",monospace;font-size:9px;line-height:1.45;padding:6px 8px;color:#9cb5ce;white-space:pre-line}
+@media(max-width:1024px){
+  body{height:auto;min-height:100vh;overflow:auto}
+  header{height:auto;min-height:78px}
+  #dashboard{height:auto;overflow:visible;}
+  #dashboard{grid-template-columns:minmax(320px,1fr) minmax(280px,1fr);grid-template-rows:minmax(350px,1fr) minmax(290px,.8fr) minmax(290px,.8fr)}
+  #radarPanel{grid-column:1;grid-row:1 / span 2}
+  #camera{grid-column:2;grid-row:1}
+  #sensorPanel{grid-column:2;grid-row:2}
+  #mapPanel{grid-column:1;grid-row:3}
+  #controls{grid-column:2;grid-row:3}
+}
+@media(max-width:700px){
+  header{align-items:flex-start;flex-direction:column}
+  .headerMeta{justify-content:flex-start}
+  #dashboard{grid-template-columns:1fr;grid-template-rows:420px 280px auto 280px 320px}
+  #radarPanel,#camera,#sensorPanel,#mapPanel,#controls{grid-column:1;grid-row:auto}
+  #radarPanel{min-height:390px}
+  .radarCanvasWrap{min-height:275px}
+  .metricGrid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brandMark" aria-hidden="true">YR</div>
+    <div>
+      <h1>YART ROVER COMMAND CENTER</h1>
+      <p class="subtitle">Autonomous rover // telemetry console</p>
+    </div>
+  </div>
+  <div class="headerMeta">
+    <span class="connectionBadge" id="connectionBadge"><i class="connectionLed"></i><span id="connectionText">OFFLINE</span></span>
+    <span class="modeBadge" id="headerMode">MODE --</span>
+  </div>
+</header>
+
+<div id="dashboard">
+  <section class="panel" id="radarPanel">
+    <div class="panelHead">
+      <div>
+        <h3>Ultrasonic Radar / PPI</h3>
+        <p class="panelKicker">Live beam returns · 30°–150° servo sweep · 0–200 cm range</p>
+      </div>
+      <span class="liveBadge" id="radarLiveBadge"><i class="liveLed"></i><span id="radarLiveText">NO DATA</span></span>
+    </div>
+    <div class="radarCanvasWrap"><canvas id="radar"></canvas></div>
+    <div class="radarLegend">
+      <div class="legendKeys">
+        <span class="legendKey"><i class="legendSwatch danger"></i>Obstacle ≤25 cm</span>
+        <span class="legendKey"><i class="legendSwatch"></i>Measured range</span>
+      </div>
+      <span class="bearingBadge" id="radarReadout">-- cm @ --°</span>
+    </div>
+  </section>
+
+  <section class="panel" id="camera">
+    <div class="panelHead"><div><h3>Camera Feed</h3><p class="panelKicker">Visual channel</p></div><span class="panelTag">NO SIGNAL</span></div>
+    <div class="cameraFrame">
+      <img id="camFeed" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="">
+      <div class="cameraEmpty"><i class="cameraIcon"></i><strong>Camera not connected</strong><span>Feed requires a camera stream source</span></div>
+    </div>
+  </section>
+
+  <section class="panel" id="sensorPanel">
+    <div class="panelHead"><div><h3>Telemetry</h3><p class="panelKicker">Live rover status</p></div><span class="panelTag">9600 BAUD</span></div>
+    <div class="metricGrid">
+      <div class="metricCard"><span class="metricLabel">Distance</span><span class="metricValue"><span id="distance">--</span><small class="metricUnit">CM</small></span></div>
+      <div class="metricCard"><span class="metricLabel">Obstacle State</span><span class="statusBadge waiting" id="status">WAITING</span></div>
+      <div class="metricCard"><span class="metricLabel">Motor PWM</span><span class="metricValue"><span id="speed">0</span><small class="metricUnit">/ 255</small></span></div>
+      <div class="metricCard"><span class="metricLabel">Drive Mode</span><span class="metricValue" id="mode" style="font-size:16px">--</span></div>
+    </div>
+  </section>
+
+  <section class="panel" id="mapPanel">
+    <div class="panelHead"><div><h3>Navigation Map</h3><p class="panelKicker">Command-estimated trail · live-follow + full route view</p></div><span class="panelTag">ESTIMATED</span></div>
+    <div class="mapStage">
+      <canvas id="map" aria-label="Live local navigation trail"></canvas>
+      <div class="overviewLabel">FULL TRAIL</div>
+      <canvas id="mapOverview" aria-label="Full session route overview"></canvas>
+    </div>
+    <div class="historyInline">
+      <div class="historyInlineHead"><strong>Command & Event Log</strong><span>SESSION</span></div>
+      <div id="history"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="controls">
+    <div class="panelHead"><div><h3>Drive Control</h3><p class="panelKicker">Keyboard arrows also supported</p></div><span class="panelTag">MANUAL / AUTO</span></div>
+    <div class="controlActions">
+      <button class="primaryButton" id="connectButton" onclick="connectRobot()">CONNECT SERIAL</button>
+      <button onclick="returnHome()">RETURN HOME</button>
+      <button onclick="replay()">REPLAY MAP</button>
+    </div>
+    <div class="drivePad">
+      <button class="up" aria-label="Forward" onclick="send('U')">▲</button>
+      <button class="left" aria-label="Turn left" onclick="send('L')">◀</button>
+      <button class="stop" aria-label="Stop" onclick="send('S')">STOP</button>
+      <button class="right" aria-label="Turn right" onclick="send('R')">▶</button>
+      <button class="down" aria-label="Reverse" onclick="send('D')">▼</button>
+    </div>
+    <p class="note">No command for 10 seconds switches the rover to autonomous mode.</p>
+  </section>
+</div>
+
+<script>
+let port = null;
+let writer = null;
+let historyCommands = [];
+const RADAR_MAX_CM = 200;
+const SAFE_CM = 25;
+
+// ====== CANVAS SETUP ======
+const radar = document.getElementById("radar");
+const rctx = radar.getContext("2d");
+const mapCanvas = document.getElementById("map");
+const mctx = mapCanvas.getContext("2d");
+const mapOverview = document.getElementById("mapOverview");
+const overviewCtx = mapOverview.getContext("2d");
+
+function setCanvasSize(){
+  radar.width = Math.max(1, radar.clientWidth);
+  radar.height = Math.max(1, radar.clientHeight);
+  mapCanvas.width = Math.max(1, mapCanvas.clientWidth);
+  mapCanvas.height = Math.max(1, mapCanvas.clientHeight);
+  mapOverview.width = Math.max(1, mapOverview.clientWidth);
+  mapOverview.height = Math.max(1, mapOverview.clientHeight);
+}
+window.addEventListener("resize", setCanvasSize);
+
+// ====== MAP VARIABLES ======
+let robotX = 0;
+let robotY = 0;
+const mapTrail = [{x:0,y:0}];
+let lastOverviewDraw = 0;
+
+// ====== RADAR VARIABLES ======
+let radarAngle = 90;
+const radarHits = new Map();
+
+// ====== LOGGING ======
+function log(txt){
+  const h = document.getElementById("history");
+  const stamp = new Date().toLocaleTimeString([], {hour12:false});
+  h.textContent += "[" + stamp + "] " + txt + "\n";
+  h.scrollTop = h.scrollHeight;
+}
+
+function setConnectionState(state,label){
+  const badge=document.getElementById("connectionBadge");
+  badge.className="connectionBadge " + state;
+  document.getElementById("connectionText").textContent=label;
+  const radarLive=document.getElementById("radarLiveBadge");
+  radarLive.className="liveBadge " + state;
+  document.getElementById("radarLiveText").textContent=state==="online"?"LIVE":(state==="connecting"?"ACQUIRING":"NO DATA");
+  const button=document.getElementById("connectButton");
+  if(button) button.textContent=state==="online"?"CONNECTED":"CONNECT SERIAL";
+}
+
+// ====== SERIAL CONNECTION ======
+async function connectRobot(){
+  try{
+    if(writer){ log("Serial connection is already open"); return; }
+    if(!("serial" in navigator)){
+      throw new Error("Web Serial API is unavailable. Use Microsoft Edge on the HTTPS controller page.");
+    }
+    setConnectionState("connecting","CONNECTING");
+    port = await navigator.serial.requestPort();
+    await port.open({baudRate:9600});
+
+    const encoder = new TextEncoderStream();
+    encoder.readable.pipeTo(port.writable).catch(err => log("Serial write closed: " + err.message));
+    writer = encoder.writable.getWriter();
+
+    readData();
+    setConnectionState("online","ONLINE");
+    log("Robot connected at 9600 baud");
+  }catch(e){
+    console.error(e);
+    setConnectionState("","OFFLINE");
+    alert("Connection Failed: " + e.message);
+  }
+}
+
+// ====== SEND COMMAND ======
+async function send(c, record=true){
+  if(!writer){
+    log("Not connected; command ignored: " + c);
+    return;
+  }
+  try{
+    await writer.write(c);
+    log("CMD: " + c);
+    if(record) historyCommands.push({cmd:c,time:Date.now(),source:"CONTROLLER"});
+    moveRobot(c);
+  }catch(e){
+    log("Send failed: " + e.message);
+  }
+}
+
+function moveRobot(c){
+  const step = 10;
+  if(c === "U") robotY -= step;
+  if(c === "D") robotY += step;
+  if(c === "L") robotX -= step;
+  if(c === "R") robotX += step;
+  if(["U","D","L","R"].includes(c)){
+    mapTrail.push({x:robotX,y:robotY});
+  }
+}
+
+// ====== ESTIMATED FOLLOW MAP + FULL-TRAIL OVERVIEW ======
+function drawMap(){
+  if(!mapCanvas.width || !mapCanvas.height) return;
+  mctx.clearRect(0,0,mapCanvas.width,mapCanvas.height);
+  mctx.save();
+  mctx.translate(mapCanvas.width/2-robotX,mapCanvas.height/2-robotY);
+
+  mctx.strokeStyle="rgba(103,139,170,.15)";
+  mctx.lineWidth=1;
+  const gridSize=40;
+  const left=robotX-mapCanvas.width/2, right=robotX+mapCanvas.width/2;
+  const top=robotY-mapCanvas.height/2, bottom=robotY+mapCanvas.height/2;
+  for(let x=Math.floor(left/gridSize)*gridSize;x<=right;x+=gridSize){
+    mctx.beginPath(); mctx.moveTo(x,top); mctx.lineTo(x,bottom); mctx.stroke();
+  }
+  for(let y=Math.floor(top/gridSize)*gridSize;y<=bottom;y+=gridSize){
+    mctx.beginPath(); mctx.moveTo(left,y); mctx.lineTo(right,y); mctx.stroke();
+  }
+  mctx.strokeStyle="rgba(72,220,255,.72)";
+  mctx.lineWidth=2;
+  mctx.beginPath();
+  for(let i=0;i<mapTrail.length;i++){
+    const point=mapTrail[i];
+    if(i===0) mctx.moveTo(point.x,point.y);
+    else mctx.lineTo(point.x,point.y);
+  }
+  mctx.stroke();
+  mctx.fillStyle="rgba(57,240,195,.10)";
+  mctx.beginPath(); mctx.arc(robotX,robotY,15,0,2*Math.PI); mctx.fill();
+  mctx.fillStyle="#57f2c4";
+  mctx.shadowColor="#39f0c3";
+  mctx.shadowBlur=12;
+  mctx.beginPath(); mctx.arc(robotX,robotY,5,0,2*Math.PI); mctx.fill();
+  mctx.shadowBlur=0;
+  mctx.fillStyle="#a9c2d8";
+  mctx.font="10px Segoe UI,Arial";
+  mctx.fillText("ROVER",robotX+10,robotY-9);
+  mctx.restore();
+  const now=performance.now();
+  if(now-lastOverviewDraw>180){drawMapOverview();lastOverviewDraw=now;}
+  requestAnimationFrame(drawMap);
+}
+
+function drawMapOverview(){
+  if(!mapOverview.width || !mapOverview.height) return;
+  const w=mapOverview.width, h=mapOverview.height, pad=10;
+  overviewCtx.clearRect(0,0,w,h);
+  let minX=0,maxX=0,minY=0,maxY=0;
+  for(const point of mapTrail){
+    minX=Math.min(minX,point.x); maxX=Math.max(maxX,point.x);
+    minY=Math.min(minY,point.y); maxY=Math.max(maxY,point.y);
+  }
+  const spanX=Math.max(40,maxX-minX), spanY=Math.max(40,maxY-minY);
+  const scale=Math.min((w-pad*2)/spanX,(h-pad*2)/spanY);
+  const offsetX=(w-spanX*scale)/2-minX*scale;
+  const offsetY=(h-spanY*scale)/2-minY*scale;
+  const project=(x,y)=>[offsetX+x*scale,offsetY+y*scale];
+
+  overviewCtx.save();
+  overviewCtx.beginPath(); overviewCtx.rect(0,0,w,h); overviewCtx.clip();
+  overviewCtx.strokeStyle="rgba(72,220,255,.78)";
+  overviewCtx.lineWidth=1.5;
+  overviewCtx.beginPath();
+  mapTrail.forEach((point,index)=>{
+    const [x,y]=project(point.x,point.y);
+    if(index===0) overviewCtx.moveTo(x,y); else overviewCtx.lineTo(x,y);
+  });
+  overviewCtx.stroke();
+
+  const [homeX,homeY]=project(0,0);
+  overviewCtx.fillStyle="#ffc96b";
+  overviewCtx.beginPath(); overviewCtx.arc(homeX,homeY,2.6,0,2*Math.PI); overviewCtx.fill();
+  const [currentX,currentY]=project(robotX,robotY);
+  overviewCtx.fillStyle="#57f2c4";
+  overviewCtx.shadowColor="#39f0c3"; overviewCtx.shadowBlur=7;
+  overviewCtx.beginPath(); overviewCtx.arc(currentX,currentY,3,0,2*Math.PI); overviewCtx.fill();
+  overviewCtx.shadowBlur=0;
+
+  const viewLeft=offsetX+(robotX-mapCanvas.width/2)*scale;
+  const viewTop=offsetY+(robotY-mapCanvas.height/2)*scale;
+  overviewCtx.strokeStyle="rgba(255,255,255,.56)";
+  overviewCtx.lineWidth=1;
+  overviewCtx.setLineDash([3,2]);
+  overviewCtx.strokeRect(viewLeft,viewTop,mapCanvas.width*scale,mapCanvas.height*scale);
+  overviewCtx.restore();
+}
+
+// ====== RETURN HOME (REVERSE RECORDED COMMANDS) ======
+async function returnHome(){
+  if(!writer){ log("Connect the rover first"); return; }
+  log("Sending reverse of the recorded command trail (estimated)");
+  const reverse = [...historyCommands].reverse();
+  for(const item of reverse){
+    const c = item.cmd;
+    let revCmd;
+    if(c === "U") revCmd = "D";
+    else if(c === "D") revCmd = "U";
+    else if(c === "L") revCmd = "R";
+    else if(c === "R") revCmd = "L";
+    else revCmd = "S";
+    await send(revCmd,false);
+    await new Promise(r=>setTimeout(r,100));
+  }
+  await send("S",false);
+  log("Reverse command trail sent; position is not encoder-verified");
+}
+
+// ====== REPLAY PATH (MAP ONLY) ======
+async function replay(){
+  log("Replaying the estimated trail on the map only");
+  if(historyCommands.length===0) return;
+
+  let tempX=0,tempY=0;
+  const pathPoints=[{x:tempX,y:tempY}];
+  for(const item of historyCommands){
+    const c=item.cmd;
+    if(c==="U") tempY-=10;
+    else if(c==="D") tempY+=10;
+    else if(c==="L") tempX-=10;
+    else if(c==="R") tempX+=10;
+    pathPoints.push({x:tempX,y:tempY});
+  }
+
+  for(let i=1;i<pathPoints.length;i++){
+    const p1=pathPoints[i-1], p2=pathPoints[i];
+    const steps=10;
+    const dx=(p2.x-p1.x)/steps;
+    const dy=(p2.y-p1.y)/steps;
+    for(let s=1;s<=steps;s++){
+      robotX=p1.x+dx*s;
+      robotY=p1.y+dy*s;
+      await new Promise(r=>setTimeout(r,30));
+    }
+  }
+  log("Map replay finished; rover was not moved");
+}
+
+// ====== LINE-BASED ROVER TELEMETRY ======
+function handleDataLine(line){
+  const colon = line.indexOf(":");
+  if(colon < 1) return;
+  const key = line.slice(0,colon).trim().toUpperCase();
+  const payload = line.slice(colon+1).trim();
+
+  if(key === "D"){
+    const cm = Number.parseInt(payload,10);
+    if(Number.isFinite(cm)) document.getElementById("distance").textContent = cm;
+  }else if(key === "S"){
+    const pwm = Number.parseInt(payload,10);
+    if(Number.isFinite(pwm)) document.getElementById("speed").textContent = pwm;
+  }else if(key === "ST"){
+    const el = document.getElementById("status");
+    el.textContent = payload;
+    el.className = "statusBadge " + (payload === "OBSTACLE" ? "danger" : (payload === "SAFE" ? "safe" : "waiting"));
+  }else if(key === "M"){
+    const mode=payload === "AUTO" ? "AUTO" : "MANUAL";
+    document.getElementById("mode").textContent = mode;
+    const headerMode=document.getElementById("headerMode");
+    headerMode.textContent = "MODE " + mode;
+    headerMode.className = "modeBadge " + (mode==="AUTO"?"auto":"manual");
+  }else if(key === "RADAR"){
+    const parts = payload.split(",").map(Number);
+    if(parts.length === 2 && parts.every(Number.isFinite)){
+      const [angle,cm] = parts;
+      radarAngle = angle;
+      radarHits.set(angle,{distance:cm,receivedAt:Date.now()});
+      const side = angle > 105 ? "LEFT" : (angle < 75 ? "RIGHT" : "FRONT");
+      document.getElementById("radarReadout").textContent = cm + " cm @ " + angle + "° (" + side + ")";
+      document.getElementById("radarReadout").title = "Latest actual ultrasonic return: " + cm + " centimetres at servo angle " + angle + " degrees";
+      while(radarHits.size > 50) radarHits.delete(radarHits.keys().next().value);
+    }
+  }else if(key === "MV"){
+    const movement = payload.toUpperCase();
+    if(["U","D","L","R"].includes(movement)){
+      historyCommands.push({cmd:movement,time:Date.now(),source:"ROVER"});
+      moveRobot(movement);
+      log("ROVER MOVE: " + movement);
+    }
+  }
+}
+
+async function readData(){
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable).catch(err => log("Serial read closed: " + err.message));
+  const reader = decoder.readable.getReader();
+  let buffer = "";
+  try{
+    while(true){
+      const {value,done} = await reader.read();
+      if(done) break;
+      if(!value) continue;
+      buffer += value;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || "";
+      for(const line of lines){
+        const clean = line.trim();
+        if(clean) handleDataLine(clean);
+      }
+    }
+  }catch(e){
+    log("Serial read error: " + e.message);
+  }finally{
+    reader.releaseLock();
+    writer = null;
+    setConnectionState("","OFFLINE");
+  }
+}
+
+// ====== KEYBOARD CONTROL ======
+document.addEventListener("keydown",function(e){
+  if(e.key==="ArrowUp") { e.preventDefault(); send("U"); }
+  if(e.key==="ArrowDown") { e.preventDefault(); send("D"); }
+  if(e.key==="ArrowLeft") { e.preventDefault(); send("L"); }
+  if(e.key==="ArrowRight") { e.preventDefault(); send("R"); }
+});
+document.addEventListener("keyup",function(e){
+  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) send("S");
+});
+
+// ====== SENSOR-DRIVEN RADAR ======
+function servoAngleToCanvas(angle){
+  const degrees = 360-angle; // 150° servo = left, 90° = forward, 30° = right
+  return degrees*Math.PI/180;
+}
+
+function drawRadar(){
+  rctx.clearRect(0,0,radar.width,radar.height);
+  const cx=radar.width/2;
+  const cy=radar.height-18;
+  const radius=Math.max(10,Math.min(radar.width/2-34,radar.height-38));
+
+  // 120-degree PPI grid matching the 30°–150° ultrasonic servo sweep.
+  rctx.beginPath();
+  rctx.moveTo(cx,cy);
+  rctx.arc(cx,cy,radius,Math.PI*210/180,Math.PI*330/180);
+  rctx.closePath();
+  rctx.fillStyle="rgba(9,34,42,.28)";
+  rctx.fill();
+
+  rctx.strokeStyle="rgba(57,240,195,.46)";
+  rctx.fillStyle="#83a9ba";
+  rctx.lineWidth=1;
+  rctx.font="9px Segoe UI,Arial";
+  rctx.textBaseline="middle";
+  for(const cm of [50,100,150,200]){
+    const r=radius*cm/RADAR_MAX_CM;
+    rctx.beginPath();
+    rctx.arc(cx,cy,r,Math.PI*210/180,Math.PI*330/180);
+    rctx.stroke();
+    rctx.fillStyle="#81a4b7";
+    rctx.fillText(cm+" cm",cx+7,cy-r+10);
+  }
+
+  for(const angle of [150,120,90,60,30]){
+    const rad=servoAngleToCanvas(angle);
+    rctx.beginPath();
+    rctx.moveTo(cx,cy);
+    rctx.lineTo(cx+radius*Math.cos(rad),cy+radius*Math.sin(rad));
+    rctx.strokeStyle=angle===90?"rgba(72,220,255,.34)":"rgba(88,126,145,.24)";
+    rctx.stroke();
+    rctx.fillStyle=angle===90?"#6bdcff":"#7693a6";
+    rctx.fillText(angle+"°",cx+(radius+10)*Math.cos(rad)-11,cy+(radius+10)*Math.sin(rad));
+  }
+
+  const scanRad=servoAngleToCanvas(radarAngle);
+  rctx.beginPath();
+  rctx.moveTo(cx,cy);
+  rctx.arc(cx,cy,radius,scanRad-.018,scanRad+.018);
+  rctx.closePath();
+  rctx.fillStyle="rgba(57,240,195,.12)";
+  rctx.fill();
+  rctx.beginPath();
+  rctx.moveTo(cx,cy);
+  rctx.lineTo(cx+radius*Math.cos(scanRad),cy+radius*Math.sin(scanRad));
+  rctx.strokeStyle="#61ffd2";
+  rctx.lineWidth=2.2;
+  rctx.shadowColor="#39f0c3";
+  rctx.shadowBlur=9;
+  rctx.stroke();
+  rctx.shadowBlur=0;
+
+  for(const [angle,reading] of radarHits){
+    const cm=reading.distance;
+    const age=Date.now()-reading.receivedAt;
+    if(age>4000) continue;
+    if(cm<0 || cm>RADAR_MAX_CM) continue;
+    const rad=servoAngleToCanvas(angle);
+    const r=radius*cm/RADAR_MAX_CM;
+    const beamHalfAngle=6*Math.PI/180;
+    const danger=cm<=SAFE_CM;
+    const fade=Math.max(.12,1-age/4000);
+
+    // Fading filled return sectors are based only on actual servo readings.
+    rctx.beginPath();
+    rctx.moveTo(cx,cy);
+    rctx.arc(cx,cy,r,rad-beamHalfAngle,rad+beamHalfAngle);
+    rctx.closePath();
+    rctx.fillStyle=danger?"rgba(255,65,91,"+(0.48*fade)+")":"rgba(57,240,195,"+(0.17*fade)+")";
+    rctx.fill();
+    rctx.strokeStyle=danger?"rgba(255,83,109,"+(fade)+")":"rgba(86,242,194,"+(.7*fade)+")";
+    rctx.lineWidth=danger?2:1;
+    rctx.stroke();
+
+    const labelX=cx+(r+5)*Math.cos(rad);
+    const labelY=cy+(r+5)*Math.sin(rad);
+    rctx.fillStyle=danger?"#ff9aaa":"#b5ffe8";
+    rctx.font="bold 10px Segoe UI,Arial";
+    rctx.fillText(cm>=RADAR_MAX_CM?">200":String(cm)+"cm",labelX-16,labelY-6);
+  }
+
+  rctx.beginPath();
+  rctx.arc(cx,cy,5,0,2*Math.PI);
+  rctx.fillStyle="#d8fbff";
+  rctx.shadowColor="#48dcff";
+  rctx.shadowBlur=10;
+  rctx.fill();
+  rctx.shadowBlur=0;
+  rctx.fillStyle="#7f9fb3";
+  rctx.font="9px Segoe UI,Arial";
+  rctx.fillText("ROVER",cx-16,cy+12);
+  requestAnimationFrame(drawRadar);
+}
+
+setCanvasSize();
+drawMap();
+drawRadar();
+</script>
+</body>
+</html>
